@@ -210,7 +210,7 @@ function App() {
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      if (speciesFilter) params.append('species', speciesFilter);
+      if (speciesFilter && speciesFilter !== 'all') params.append('species', speciesFilter);
       if (searchTerm) params.append('search', searchTerm);
       
       const response = await axios.get(`${API}/monkeys?${params}`);
