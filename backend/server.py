@@ -1,10 +1,9 @@
 from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-import boto3
-from boto3.dynamodb.conditions import Key, Attr
 import os
 import logging
+import json
 from pathlib import Path
 from pydantic import BaseModel, Field, validator
 from typing import List, Optional
@@ -16,19 +15,8 @@ from enum import Enum
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# AWS DynamoDB setup
-aws_access_key_id = os.environ['AWS_ACCESS_KEY_ID']
-aws_secret_access_key = os.environ['AWS_SECRET_ACCESS_KEY']
-aws_region = os.environ['AWS_REGION']
-table_name = os.environ['DYNAMODB_TABLE_NAME']
-
-# Initialize DynamoDB client
-dynamodb = boto3.resource(
-    'dynamodb',
-    region_name=aws_region,
-    aws_access_key_id=aws_access_key_id,
-    aws_secret_access_key=aws_secret_access_key
-)
+# JSON file storage setup (fallback from DynamoDB due to permission issues)
+DATA_FILE = ROOT_DIR / 'monkeys_data.json'
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -85,85 +73,38 @@ class Monkey(BaseModel):
     updated_at: str
 
 
-# Initialize DynamoDB table
-def get_table():
+# JSON Storage Functions
+def load_monkeys_data():
+    """Load monkeys data from JSON file"""
+    if not DATA_FILE.exists():
+        return {}
     try:
-        table = dynamodb.Table(table_name)
-        # Try to access the table directly, create if it doesn't exist
-        try:
-            # First, just try to use the table without checking if it exists
-            # This avoids the DescribeTable permission issue
-            return table
-        except:
-            # If table doesn't exist, try to create it
-            table = dynamodb.create_table(
-                TableName=table_name,
-                KeySchema=[
-                    {
-                        'AttributeName': 'PK',
-                        'KeyType': 'HASH'
-                    },
-                    {
-                        'AttributeName': 'SK',
-                        'KeyType': 'RANGE'
-                    }
-                ],
-                AttributeDefinitions=[
-                    {
-                        'AttributeName': 'PK',
-                        'AttributeType': 'S'
-                    },
-                    {
-                        'AttributeName': 'SK',
-                        'AttributeType': 'S'
-                    },
-                    {
-                        'AttributeName': 'species',
-                        'AttributeType': 'S'
-                    }
-                ],
-                GlobalSecondaryIndexes=[
-                    {
-                        'IndexName': 'species-index',
-                        'KeySchema': [
-                            {
-                                'AttributeName': 'species',
-                                'KeyType': 'HASH'
-                            }
-                        ],
-                        'Projection': {
-                            'ProjectionType': 'ALL'
-                        },
-                        'ProvisionedThroughput': {
-                            'ReadCapacityUnits': 5,
-                            'WriteCapacityUnits': 5
-                        }
-                    }
-                ],
-                ProvisionedThroughput={
-                    'ReadCapacityUnits': 5,
-                    'WriteCapacityUnits': 5
-                }
-            )
-            table.wait_until_exists()
-            return table
+        with open(DATA_FILE, 'r') as f:
+            return json.load(f)
     except Exception as e:
-        logger.error(f"Error with table operations: {e}")
-        # If we still can't access/create table, just return the table object
-        # It might still work for basic operations
-        return dynamodb.Table(table_name)
+        logger.error(f"Error loading data: {e}")
+        return {}
+
+
+def save_monkeys_data(data):
+    """Save monkeys data to JSON file"""
+    try:
+        with open(DATA_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving data: {e}")
+        raise HTTPException(status_code=500, detail="Error saving data")
 
 
 # Helper functions
 async def check_name_duplicate(name: str, species: str, exclude_monkey_id: str = None):
     """Check if a monkey with the same name and species already exists"""
-    table = get_table()
     try:
-        response = table.scan(
-            FilterExpression=Attr('name').eq(name) & Attr('species').eq(species)
-        )
-        for item in response['Items']:
-            if exclude_monkey_id is None or item['monkey_id'] != exclude_monkey_id:
+        data = load_monkeys_data()
+        for monkey_id, monkey in data.items():
+            if (monkey['name'].lower() == name.lower() and 
+                monkey['species'] == species and 
+                (exclude_monkey_id is None or monkey_id != exclude_monkey_id)):
                 return True
         return False
     except Exception as e:
@@ -180,8 +121,6 @@ async def root():
 @api_router.post("/monkeys", response_model=Monkey)
 async def create_monkey(monkey_data: MonkeyCreate):
     """Create a new monkey"""
-    table = get_table()
-
     # Check for duplicate name within species
     if await check_name_duplicate(monkey_data.name, monkey_data.species.value):
         raise HTTPException(
@@ -193,10 +132,8 @@ async def create_monkey(monkey_data: MonkeyCreate):
     monkey_id = str(uuid.uuid4())
     now = datetime.utcnow().isoformat()
 
-    # Prepare item for DynamoDB
-    item = {
-        'PK': f'MONKEY#{monkey_id}',
-        'SK': f'MONKEY#{monkey_id}',
+    # Create monkey record
+    monkey_record = {
         'monkey_id': monkey_id,
         'name': monkey_data.name,
         'species': monkey_data.species.value,
@@ -208,8 +145,12 @@ async def create_monkey(monkey_data: MonkeyCreate):
     }
 
     try:
-        table.put_item(Item=item)
-        return Monkey(**item)
+        # Load existing data
+        data = load_monkeys_data()
+        data[monkey_id] = monkey_record
+        save_monkeys_data(data)
+        
+        return Monkey(**monkey_record)
     except Exception as e:
         logger.error(f"Error creating monkey: {e}")
         raise HTTPException(status_code=500, detail="Error creating monkey")
@@ -218,31 +159,23 @@ async def create_monkey(monkey_data: MonkeyCreate):
 @api_router.get("/monkeys", response_model=List[Monkey])
 async def list_monkeys(species: Optional[str] = None, search: Optional[str] = None):
     """List all monkeys with optional filtering"""
-    table = get_table()
-
     try:
-        if species:
-            # Use GSI to filter by species
-            response = table.query(
-                IndexName='species-index',
-                KeyConditionExpression=Key('species').eq(species)
-            )
-        else:
-            # Scan all items
-            response = table.scan(
-                FilterExpression=Attr('PK').begins_with('MONKEY#')
-            )
-
+        data = load_monkeys_data()
         monkeys = []
-        for item in response['Items']:
-            # Additional search filtering if provided
+        
+        for monkey_record in data.values():
+            # Species filtering
+            if species and monkey_record['species'] != species:
+                continue
+                
+            # Search filtering
             if search:
                 search_lower = search.lower()
-                if (search_lower not in item['name'].lower() and 
-                    search_lower not in item['species'].lower()):
+                if (search_lower not in monkey_record['name'].lower() and 
+                    search_lower not in monkey_record['species'].lower()):
                     continue
             
-            monkeys.append(Monkey(**item))
+            monkeys.append(Monkey(**monkey_record))
 
         return monkeys
     except Exception as e:
@@ -253,20 +186,12 @@ async def list_monkeys(species: Optional[str] = None, search: Optional[str] = No
 @api_router.get("/monkeys/{monkey_id}", response_model=Monkey)
 async def get_monkey(monkey_id: str):
     """Get a specific monkey by ID"""
-    table = get_table()
-
     try:
-        response = table.get_item(
-            Key={
-                'PK': f'MONKEY#{monkey_id}',
-                'SK': f'MONKEY#{monkey_id}'
-            }
-        )
-        
-        if 'Item' not in response:
+        data = load_monkeys_data()
+        if monkey_id not in data:
             raise HTTPException(status_code=404, detail="Monkey not found")
         
-        return Monkey(**response['Item'])
+        return Monkey(**data[monkey_id])
     except HTTPException:
         raise
     except Exception as e:
@@ -277,67 +202,38 @@ async def get_monkey(monkey_id: str):
 @api_router.put("/monkeys/{monkey_id}", response_model=Monkey)
 async def update_monkey(monkey_id: str, updates: MonkeyUpdate):
     """Update an existing monkey"""
-    table = get_table()
-
-    # First, get the existing monkey
     try:
-        response = table.get_item(
-            Key={
-                'PK': f'MONKEY#{monkey_id}',
-                'SK': f'MONKEY#{monkey_id}'
-            }
-        )
-        
-        if 'Item' not in response:
+        data = load_monkeys_data()
+        if monkey_id not in data:
             raise HTTPException(status_code=404, detail="Monkey not found")
         
-        existing_monkey = response['Item']
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error getting existing monkey: {e}")
-        raise HTTPException(status_code=500, detail="Error updating monkey")
-
-    # Check for name duplicate if name or species is being updated
-    update_dict = updates.dict(exclude_unset=True)
-    if 'name' in update_dict or 'species' in update_dict:
-        new_name = update_dict.get('name', existing_monkey['name'])
-        new_species = update_dict.get('species', existing_monkey['species'])
-        if await check_name_duplicate(new_name, new_species, monkey_id):
-            raise HTTPException(
-                status_code=400, 
-                detail=f"A monkey named '{new_name}' already exists in species '{new_species}'"
-            )
-
-    # Update the monkey
-    try:
-        # Prepare update expression
-        update_expression = "SET updated_at = :updated_at"
-        expression_values = {':updated_at': datetime.utcnow().isoformat()}
+        existing_monkey = data[monkey_id]
         
+        # Check for name duplicate if name or species is being updated
+        update_dict = updates.dict(exclude_unset=True)
+        if 'name' in update_dict or 'species' in update_dict:
+            new_name = update_dict.get('name', existing_monkey['name'])
+            new_species = update_dict.get('species', existing_monkey['species'])
+            if await check_name_duplicate(new_name, new_species, monkey_id):
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"A monkey named '{new_name}' already exists in species '{new_species}'"
+                )
+
+        # Update the monkey
         for key, value in update_dict.items():
             if value is not None:
-                update_expression += f", {key} = :{key}"
-                expression_values[f':{key}'] = value
-
-        table.update_item(
-            Key={
-                'PK': f'MONKEY#{monkey_id}',
-                'SK': f'MONKEY#{monkey_id}'
-            },
-            UpdateExpression=update_expression,
-            ExpressionAttributeValues=expression_values
-        )
-
-        # Get updated monkey
-        response = table.get_item(
-            Key={
-                'PK': f'MONKEY#{monkey_id}',
-                'SK': f'MONKEY#{monkey_id}'
-            }
-        )
+                existing_monkey[key] = value
         
-        return Monkey(**response['Item'])
+        existing_monkey['updated_at'] = datetime.utcnow().isoformat()
+        
+        # Save updated data
+        data[monkey_id] = existing_monkey
+        save_monkeys_data(data)
+        
+        return Monkey(**existing_monkey)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating monkey: {e}")
         raise HTTPException(status_code=500, detail="Error updating monkey")
@@ -346,27 +242,14 @@ async def update_monkey(monkey_id: str, updates: MonkeyUpdate):
 @api_router.delete("/monkeys/{monkey_id}")
 async def delete_monkey(monkey_id: str):
     """Delete a monkey by ID"""
-    table = get_table()
-
     try:
-        # Check if monkey exists first
-        response = table.get_item(
-            Key={
-                'PK': f'MONKEY#{monkey_id}',
-                'SK': f'MONKEY#{monkey_id}'
-            }
-        )
-        
-        if 'Item' not in response:
+        data = load_monkeys_data()
+        if monkey_id not in data:
             raise HTTPException(status_code=404, detail="Monkey not found")
 
         # Delete the monkey
-        table.delete_item(
-            Key={
-                'PK': f'MONKEY#{monkey_id}',
-                'SK': f'MONKEY#{monkey_id}'
-            }
-        )
+        del data[monkey_id]
+        save_monkeys_data(data)
         
         return {"message": "Monkey deleted successfully"}
     except HTTPException:
