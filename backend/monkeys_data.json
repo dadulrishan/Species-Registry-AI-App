@@ -8,5 +8,75 @@
     "last_checkup_at": null,
     "created_at": "2025-08-24T12:00:41.826192",
     "updated_at": "2025-08-24T12:00:41.826192"
+  },
+  "711bde5a-c61e-407f-a1e2-13fe0191b3f5": {
+    "monkey_id": "711bde5a-c61e-407f-a1e2-13fe0191b3f5",
+    "name": "TestMonkey_120217",
+    "species": "capuchin",
+    "age_years": 5,
+    "favourite_fruit": "banana",
+    "last_checkup_at": "2024-01-15T10:30:00",
+    "created_at": "2025-08-24T12:02:17.769449",
+    "updated_at": "2025-08-24T12:02:17.769449"
+  },
+  "160295f6-743a-4aa1-ad54-7de2d6d6b173": {
+    "monkey_id": "160295f6-743a-4aa1-ad54-7de2d6d6b173",
+    "name": "TestMarmoset_120218",
+    "species": "marmoset",
+    "age_years": 20,
+    "favourite_fruit": "grape",
+    "last_checkup_at": null,
+    "created_at": "2025-08-24T12:02:18.092886",
+    "updated_at": "2025-08-24T12:02:18.092886"
+  },
+  "11701ff2-308f-4782-965d-fcb8771e03cc": {
+    "monkey_id": "11701ff2-308f-4782-965d-fcb8771e03cc",
+    "name": "DuplicateTest_120218",
+    "species": "macaque",
+    "age_years": 8,
+    "favourite_fruit": "apple",
+    "last_checkup_at": null,
+    "created_at": "2025-08-24T12:02:18.149822",
+    "updated_at": "2025-08-24T12:02:18.149822"
+  },
+  "1f665bf7-b9d0-4a30-9fd3-2edb69312298": {
+    "monkey_id": "1f665bf7-b9d0-4a30-9fd3-2edb69312298",
+    "name": "SameName_120218",
+    "species": "howler",
+    "age_years": 10,
+    "favourite_fruit": "mango",
+    "last_checkup_at": null,
+    "created_at": "2025-08-24T12:02:18.199630",
+    "updated_at": "2025-08-24T12:02:18.199630"
+  },
+  "aaf0c574-2a28-477e-96a5-33bed14b60f0": {
+    "monkey_id": "aaf0c574-2a28-477e-96a5-33bed14b60f0",
+    "name": "GetTest_120218",
+    "species": "macaque",
+    "age_years": 12,
+    "favourite_fruit": "orange",
+    "last_checkup_at": null,
+    "created_at": "2025-08-24T12:02:18.403834",
+    "updated_at": "2025-08-24T12:02:18.403834"
+  },
+  "f5634d39-0866-4156-ae68-69aeb44f6a5a": {
+    "monkey_id": "f5634d39-0866-4156-ae68-69aeb44f6a5a",
+    "name": "UpdateTest_120218",
+    "species": "howler",
+    "age_years": 15,
+    "favourite_fruit": "papaya",
+    "last_checkup_at": null,
+    "created_at": "2025-08-24T12:02:18.504355",
+    "updated_at": "2025-08-24T12:02:18.504355"
+  },
+  "84fa8b3c-696d-43b0-b946-0a49eeacc325": {
+    "monkey_id": "84fa8b3c-696d-43b0-b946-0a49eeacc325",
+    "name": "DeleteTest_120218",
+    "species": "capuchin",
+    "age_years": 6,
+    "favourite_fruit": "strawberry",
+    "last_checkup_at": null,
+    "created_at": "2025-08-24T12:02:18.604975",
+    "updated_at": "2025-08-24T12:02:18.604975"
   }
 }
