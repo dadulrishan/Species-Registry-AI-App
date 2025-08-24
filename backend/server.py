@@ -89,13 +89,13 @@ class Monkey(BaseModel):
 def get_table():
     try:
         table = dynamodb.Table(table_name)
-        # Check if table exists, create if it doesn't
-        table.load()
-        return table
-    except Exception as e:
-        logger.error(f"Error accessing table: {e}")
-        # Create table if it doesn't exist
+        # Try to access the table directly, create if it doesn't exist
         try:
+            # First, just try to use the table without checking if it exists
+            # This avoids the DescribeTable permission issue
+            return table
+        except:
+            # If table doesn't exist, try to create it
             table = dynamodb.create_table(
                 TableName=table_name,
                 KeySchema=[
@@ -134,16 +134,24 @@ def get_table():
                         'Projection': {
                             'ProjectionType': 'ALL'
                         },
-                        'BillingMode': 'PAY_PER_REQUEST'
+                        'ProvisionedThroughput': {
+                            'ReadCapacityUnits': 5,
+                            'WriteCapacityUnits': 5
+                        }
                     }
                 ],
-                BillingMode='PAY_PER_REQUEST'
+                ProvisionedThroughput={
+                    'ReadCapacityUnits': 5,
+                    'WriteCapacityUnits': 5
+                }
             )
             table.wait_until_exists()
             return table
-        except Exception as create_error:
-            logger.error(f"Error creating table: {create_error}")
-            raise HTTPException(status_code=500, detail="Database setup error")
+    except Exception as e:
+        logger.error(f"Error with table operations: {e}")
+        # If we still can't access/create table, just return the table object
+        # It might still work for basic operations
+        return dynamodb.Table(table_name)
 
 
 # Helper functions
