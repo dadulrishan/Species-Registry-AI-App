@@ -303,7 +303,7 @@ function App() {
               ))}
             </SelectContent>
           </Select>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <Dialog open={isCreateDialogOpen} onOpenChange={handleCreateDialogClose}>
             <DialogTrigger asChild>
               <Button className="w-full md:w-auto">
                 <Plus className="w-4 h-4 mr-2" />
