@@ -53,10 +53,14 @@ const MonkeyForm = ({ monkey, onSave, onCancel, isEdit = false }) => {
       }
       onSave();
     } catch (error) {
+      console.error('Error submitting form:', error);
+      const errorMessage = error.response?.data?.detail || 
+                          error.response?.data?.message || 
+                          "Something went wrong!";
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.response?.data?.detail || "Something went wrong!"
+        description: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage)
       });
     } finally {
       setLoading(false);
