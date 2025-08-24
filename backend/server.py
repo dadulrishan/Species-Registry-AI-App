@@ -118,7 +118,7 @@ async def root():
     return {"message": "Monkey Registry API"}
 
 
-@api_router.post("/monkeys", response_model=Monkey)
+@api_router.post("/monkeys", response_model=Monkey, status_code=201)
 async def create_monkey(monkey_data: MonkeyCreate):
     """Create a new monkey"""
     # Check for duplicate name within species
