@@ -255,6 +255,17 @@ function App() {
     fetchMonkeys();
   };
 
+  const handleCreateDialogClose = (open) => {
+    setIsCreateDialogOpen(open);
+    // Reset form when dialog closes
+    if (!open) {
+      // Force form reset by unmounting and remounting
+      setTimeout(() => {
+        setIsCreateDialogOpen(false);
+      }, 100);
+    }
+  };
+
   useEffect(() => {
     fetchMonkeys();
   }, [searchTerm, speciesFilter]);
