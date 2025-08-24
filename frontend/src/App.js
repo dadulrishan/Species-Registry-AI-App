@@ -280,7 +280,7 @@ function App() {
               <SelectValue placeholder="Filter by species" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Species</SelectItem>
+              <SelectItem value="all">All Species</SelectItem>
               {SPECIES_OPTIONS.map(species => (
                 <SelectItem key={species} value={species}>
                   {species.charAt(0).toUpperCase() + species.slice(1)}
